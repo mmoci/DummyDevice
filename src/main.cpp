@@ -9,7 +9,13 @@ static const char* TAG = "MAIN";
 // Initialize the SD card logger with the specified configuration
 static SdCardLogger sdCardLogger{SdCardLogger::Config{.csPin = 5, .logFileName = "/log"}};
 auto sdCardFlushCb = [](){ sdCardLogger.flush(); };
-DummyDevice::Config dummyDeviceConfig{.ssid=WIFI_SSID, .password=WIFI_PASSWORD};
+DummyDevice::Config dummyDeviceConfig
+{
+  .ssid=WIFI_SSID, 
+  .password=WIFI_PASSWORD, 
+  .primaryDns=IPAddress(1, 1, 1, 1), 
+  .secondaryDns=IPAddress(8, 8, 8, 8)
+};
 static DummyDevice dummyDevice{dummyDeviceConfig};
 
 void setup() 

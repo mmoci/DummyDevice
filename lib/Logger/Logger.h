@@ -1,47 +1,37 @@
 #pragma once
 
+#include <Arduino.h>
 #include <functional>
 #include <string>
 #include <cstdio>
 #include <utility>
 
+#if defined(ESP32) || defined(ESP_PLATFORM)
+#include <esp_log.h>
+#endif
+
 using LogHandler = std::function<void(const std::string& logLevel, const std::string& tag, const std::string& message)>;
 
-#if defined(ESP32) || defined(ESP_PLATFORM)
-    // ESP32 / ESP-IDF: use native logging — runtime level control available
+#define LOG_ERROR(tag, format, args...)   do { \
+    Logger::dispatch("ERROR", tag, format, ##args); \
+} while(0)
 
-    #include <esp_log.h>
+#define LOG_WARN(tag, format, args...)    do { \
+    Logger::dispatch("WARN", tag, format, ##args); \
+} while(0)
 
-    #define LOG_ERROR(tag, format, args...)   do { \
-        char log_buf[16]; \
-        esp_log_write(ESP_LOG_ERROR, tag, "[ERROR] [%s] %s: " format "\n", Logger::log_fmt_time(log_buf, sizeof(log_buf), millis()), tag, ##args); \
-        Logger::dispatch("ERROR", tag, format, ##args); \
-    } while(0)
+#define LOG_INFO(tag, format, args...)    do { \
+    Logger::dispatch("INFO", tag, format, ##args); \
+} while(0)
 
-    #define LOG_WARN(tag, format, args...)    do { \
-        char log_buf[16]; \
-        esp_log_write(ESP_LOG_WARN, tag, "[WARN] [%s] %s: " format "\n", Logger::log_fmt_time(log_buf, sizeof(log_buf), millis()), tag, ##args); \
-        Logger::dispatch("WARN", tag, format, ##args); \
-    } while(0)
+#define LOG_DEBUG(tag, format, args...)   do { \
+    Logger::dispatch("DEBUG", tag, format, ##args); \
+} while(0)
 
-    #define LOG_INFO(tag, format, args...)    do { \
-        char log_buf[16]; \
-        esp_log_write(ESP_LOG_INFO, tag, "[INFO] [%s] %s: " format "\n", Logger::log_fmt_time(log_buf, sizeof(log_buf), millis()), tag, ##args); \
-        Logger::dispatch("INFO", tag, format, ##args); \
-    } while(0)
+#define LOG_VERBOSE(tag, format, args...) do { \
+    Logger::dispatch("VERBOSE", tag, format, ##args); \
+} while(0)
 
-    #define LOG_DEBUG(tag, format, args...)   do { \
-        char log_buf[16]; \
-        esp_log_write(ESP_LOG_DEBUG, tag, "[DEBUG] [%s] %s: " format "\n", Logger::log_fmt_time(log_buf, sizeof(log_buf), millis()), tag, ##args); \
-        Logger::dispatch("DEBUG", tag, format, ##args); \
-    } while(0)
-
-    #define LOG_VERBOSE(tag, format, args...) do { \
-        char log_buf[16]; \
-        esp_log_write(ESP_LOG_VERBOSE, tag, "[VERBOSE] [%s] %s: " format "\n", Logger::log_fmt_time(log_buf, sizeof(log_buf), millis()), tag, ##args); \
-        Logger::dispatch("VERBOSE", tag, format, ##args); \
-    } while(0)
-    #endif
 
 namespace Logger 
 {
@@ -62,16 +52,50 @@ namespace Logger
         return buf;
     }
 
-    template<typename... Args>
-    inline void dispatch(const char* logLevel, const char* tag, const char* format, Args... args)
-    {
-        if (!sdCardLogHandler)
+    #if defined(ESP32) || defined(ESP_PLATFORM)
+        inline const char* logLevelToString(esp_log_level_t logLevel)
         {
-            return;
+            switch (logLevel)
+            {
+                case ESP_LOG_ERROR:   return "ERROR";
+                case ESP_LOG_WARN:    return "WARN";
+                case ESP_LOG_INFO:    return "INFO";
+                case ESP_LOG_DEBUG:   return "DEBUG";
+                case ESP_LOG_VERBOSE: return "VERBOSE";
+                default:              return "UNKNOWN";
+            }
         }
 
-        char log_buf[256];
-        snprintf(log_buf, sizeof(log_buf), format, args...);
-        sdCardLogHandler(logLevel, tag, log_buf);
+        inline esp_log_level_t logLevelFromString(const std::string& logLevel)
+        {
+            if (logLevel == "ERROR")   return ESP_LOG_ERROR;
+            if (logLevel == "WARN")    return ESP_LOG_WARN;
+            if (logLevel == "INFO")    return ESP_LOG_INFO;
+            if (logLevel == "DEBUG")   return ESP_LOG_DEBUG;
+            if (logLevel == "VERBOSE") return ESP_LOG_VERBOSE;
+            return ESP_LOG_NONE;
+        }
+    #endif
+
+    template<typename... Args>
+    inline void dispatch(const std::string& logLevel, const char* tag, const char* format, Args... args)
+    {
+        const char* level = logLevel.c_str();
+        
+        char log_time[16];
+        char log_message[256]{};
+        snprintf(log_message, sizeof(log_message), format, args...);
+        const char* formattedTime = Logger::log_fmt_time(log_time, sizeof(log_time), millis());
+
+        #if defined(ESP32) || defined(ESP_PLATFORM)
+            esp_log_write(Logger::logLevelFromString(logLevel), tag, "[%s] [%s] %s: %s\n", level, formattedTime, tag, log_message);
+        #else
+            Serial.printf("[%s] [%s] %s: %s\n", level, formattedTime, tag, log_message);
+        #endif
+
+        if (sdCardLogHandler)
+        {
+            sdCardLogHandler(level, tag, log_message);
+        }
     }
 }

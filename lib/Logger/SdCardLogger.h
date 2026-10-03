@@ -48,13 +48,14 @@ class SdCardLogger
         std::string logFileName{};
     };
 
-    SdCardLogger(const Config& config);
+    SdCardLogger(const Config& config){}
 
-    void init();
-    void flush();
+    void init(){}
+    void flush(){}
 
     private:
     static constexpr unsigned long FLUSH_INTERVAL_MS{1000};
+    Config m_config{};
 };
 
 #endif
