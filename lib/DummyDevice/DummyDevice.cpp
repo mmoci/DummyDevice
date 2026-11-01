@@ -1,5 +1,6 @@
 #include "DummyDevice.h"
 #include "Logger.h"
+#include "Config.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 
@@ -8,7 +9,7 @@ static const char* TAG = "DummyDevice";
 DummyDevice::DummyDevice(const Config& config) : m_config(config) 
 {}
 
-void DummyDevice::init(const SdCardFlushCb& sdCardFlushCb)
+void DummyDevice::init(const SdCardFlushCb& sdCardFlushCb, bool stayAwake)
 {
     if(connectToWiFi())
     {
@@ -36,8 +37,13 @@ void DummyDevice::init(const SdCardFlushCb& sdCardFlushCb)
     Serial.flush();
     delay(100);
 
-    esp_sleep_enable_timer_wakeup(DEEP_SLEEP_DURATION); // DEEP_SLEEP_DURATION in microseconds (e.g., 60 * 1000000ULL)
-    esp_deep_sleep_start();
+    if(!stayAwake)
+    {
+        esp_sleep_enable_timer_wakeup(DEEP_SLEEP_DURATION); // DEEP_SLEEP_DURATION in microseconds (e.g., 60 * 1000000ULL)
+        esp_deep_sleep_start();
+    }
+    else
+        LOG_INFO(TAG, "Boot mode, skipping deep sleep.");
 }
 
 void DummyDevice::update()
@@ -49,6 +55,7 @@ bool DummyDevice::connectToWiFi()
 
     WiFi.persistent(false);
     WiFi.mode(WIFI_STA);
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);
 
     if (m_config.staticIp != IPAddress{})
         WiFi.config(m_config.staticIp, m_config.gateway, m_config.subnet, m_config.primaryDns, m_config.secondaryDns);
@@ -58,12 +65,12 @@ bool DummyDevice::connectToWiFi()
     const uint32_t start = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - start < WIFI_SETUP_TIMEOUT)) 
     {
-        vTaskDelay(pdMS_TO_TICKS(100));
+        delay(100);
     }
 
     if (WiFi.status() == WL_CONNECTED)
     {
-        vTaskDelay(pdMS_TO_TICKS(300));
+        delay(300);
 
         // Print network diagnostics
         LOG_INFO(TAG, "Wi-Fi Connected! Local IP: %s", WiFi.localIP().toString().c_str());
